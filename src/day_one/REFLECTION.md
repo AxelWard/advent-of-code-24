@@ -20,9 +20,11 @@ similarity value, and continue on with the next element in the array.
 I think there is a potential bug in my second implementation, but the particular input I got did not
 end up triggering it. Imagine the inputs
 
+```
 4   2
 4   4
 4   5
+```
 
 The total similarities *should* be 12 (4 * 1 + 4 * 1 + 4 * 1), my solution will give 4 though. I would
 fix this if I had more time, but today ain't that day bucko.
