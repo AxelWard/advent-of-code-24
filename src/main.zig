@@ -1,6 +1,7 @@
 const std = @import("std");
+const day_one = @import("./day_one/day_one.zig");
 
 pub fn main() !void {
-    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
+    const allocator = std.heap.page_allocator;
+    try day_one.run(allocator);
 }
