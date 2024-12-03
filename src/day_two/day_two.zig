@@ -30,8 +30,6 @@ pub fn run(allocator: std.mem.Allocator) !void {
             }
             if (try checkLineValidWithTolerance(line_array, allocator)) {
                 safe_reports_with_tolerance += 1;
-            } else {
-                std.debug.print(" Bad line {}\n", .{line_index});
             }
         }
     }
