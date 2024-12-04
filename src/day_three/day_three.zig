@@ -102,5 +102,5 @@ pub fn run(allocator: std.mem.Allocator) !void {
     }
 
     std.debug.print("Total of valid muls (part 1): {}\n", .{total_one});
-    std.debug.print("Total of valid muls (part 2): {}\n\n", .{total_two});
+    std.debug.print("Total of valid muls (part 2): {}\n", .{total_two});
 }

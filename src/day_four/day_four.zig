@@ -13,6 +13,7 @@ const DOWN_LEFT = Direction{ .direction_mask = 0b00000010, .x = -1, .y = 1 };
 const LEFT = Direction{ .direction_mask = 0b00000001, .x = -1, .y = 0 };
 
 const EVERY_DIRECTION = [8]Direction{ UP_LEFT, UP, UP_RIGHT, RIGHT, DOWN_RIGHT, DOWN, DOWN_LEFT, LEFT };
+const X_DIRECTIONS = [2][2]Direction{ [2]Direction{ UP_LEFT, DOWN_RIGHT }, [2]Direction{ UP_RIGHT, DOWN_LEFT } };
 
 const Location = struct {
     x: usize,
@@ -25,7 +26,7 @@ const Location = struct {
 };
 
 pub fn run(allocator: std.mem.Allocator) !void {
-    std.debug.print("Running AoC Day 4...\n\n", .{});
+    std.debug.print("\n\nRunning AoC Day 4...\n\n", .{});
 
     const buffer = try allocator.alloc(u8, 20000);
     defer allocator.free(buffer);
@@ -49,7 +50,8 @@ pub fn run(allocator: std.mem.Allocator) !void {
     const crossword = try lines_conjoined.toOwnedSlice();
     defer allocator.free(crossword);
 
-    var xmas_count: u64 = 0;
+    var xmas_count: usize = 0;
+    var x_mas_count: usize = 0;
     while (location.current() < crossword.len) {
         if (location.x >= location.width) {
             location.x = 0;
@@ -64,25 +66,34 @@ pub fn run(allocator: std.mem.Allocator) !void {
             for (EVERY_DIRECTION) |direction| {
                 if (direction.direction_mask & good_directions == direction.direction_mask) {
                     xmas_count += 1;
-
-                    if (direction.direction_mask == RIGHT.direction_mask) {
-                        location.x += 3;
-                    }
                 }
+            }
+        }
+
+        if (crossword[location.current()] == 'A') {
+            if (check_for_x(crossword, location)) {
+                x_mas_count += 1;
             }
         }
 
         location.x += 1;
     }
 
-    std.debug.print("\nFound {} XMASs\n\n", .{xmas_count});
+    std.debug.print("Found {} XMASs\n", .{xmas_count});
+    std.debug.print("Found {} X-MASs\n", .{x_mas_count});
 }
 
-// The idea is to essentially apply each directions bitmask to the directions to search,
-// see which ones find the first character in the find string we have remaining, and then
-// continue in that direction if they find what they are looking for. This will be recursive,
-// and will only return the directions that are good :)
-pub fn check_directions(
+fn get_next_location(location: Location, direction: Direction) ?Location {
+    const next_x = @as(isize, @intCast(location.x)) + direction.x;
+    if (next_x < 0 or next_x >= location.width) return null;
+
+    const next_y = @as(isize, @intCast(location.y)) + direction.y;
+    if (next_y < 0) return null;
+
+    return Location{ .width = location.width, .x = @as(usize, @intCast(next_x)), .y = @as(usize, @intCast(next_y)) };
+}
+
+fn check_directions(
     directions: u8,
     find: []const u8,
     buffer: []const u8,
@@ -92,25 +103,41 @@ pub fn check_directions(
         return directions;
     }
 
-    // Check every direction that matches what we should search
     var good_directions: u8 = 0;
     for (EVERY_DIRECTION) |direction| {
         if (direction.direction_mask & directions == direction.direction_mask) {
-            const next_x = @as(isize, @intCast(location.x)) + direction.x;
-            if (next_x < 0 or next_x >= location.width) continue;
+            if (get_next_location(location, direction)) |next_location| {
+                if (next_location.current() > buffer.len) continue;
 
-            const next_y = @as(isize, @intCast(location.y)) + direction.y;
-            if (next_y < 0) continue;
-
-            const next_location = Location{ .width = location.width, .x = @as(usize, @intCast(next_x)), .y = @as(usize, @intCast(next_y)) };
-
-            if (next_location.current() > buffer.len) continue;
-
-            if (buffer[next_location.current()] == find[0]) {
-                good_directions |= check_directions(direction.direction_mask, find[1..], buffer, next_location);
+                if (buffer[next_location.current()] == find[0]) {
+                    good_directions |= check_directions(direction.direction_mask, find[1..], buffer, next_location);
+                }
             }
         }
     }
 
     return good_directions;
+}
+
+fn check_for_x(buffer: []const u8, location: Location) bool {
+    var found_mas: usize = 0;
+    for (X_DIRECTIONS) |directions| {
+        var m_found = false;
+        var s_found = false;
+        for (directions) |direction| {
+            if (get_next_location(location, direction)) |next_location| {
+                if (next_location.current() > buffer.len) continue;
+
+                if (buffer[next_location.current()] == 'S' and !s_found) {
+                    s_found = true;
+                } else if (buffer[next_location.current()] == 'M' and !m_found) {
+                    m_found = true;
+                }
+            }
+        }
+
+        if (m_found and s_found) found_mas += 1;
+    }
+
+    return found_mas == 2;
 }
