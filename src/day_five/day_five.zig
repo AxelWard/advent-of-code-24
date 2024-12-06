@@ -1,8 +1,13 @@
-// Create a hash map of the rules
-// As you're checking prints add the new pages that are not allowed based on the current page
-// Check the next page to make sure its not in the list of pages that are not allowed
 const std = @import("std");
 const file = @import("../file-helpers.zig");
+const arrayListContainsValue = @import("../array_list_helpers.zig").arrayListContainsValue(
+    []const u8,
+    struct {
+        fn eqfn(a: []const u8, b: []const u8) bool {
+            return std.mem.eql(u8, a, b);
+        }
+    }.eqfn,
+);
 
 pub fn run(allocator: std.mem.Allocator) !void {
     std.debug.print("\n\nRunning AoC Day 5...\n\n", .{});
@@ -27,12 +32,12 @@ pub fn run(allocator: std.mem.Allocator) !void {
             if (second_chunk) |second_page| {
                 try add_rule(first_chunk, second_page, &rules, allocator);
             } else {
-                if (try check_print_valid(first_chunk, &rules, allocator)) {
-                    valid_total += try get_middle_page(first_chunk, allocator);
+                if (try checkPrintValid(first_chunk, &rules, allocator)) {
+                    valid_total += try getMiddlePage(first_chunk, allocator);
                 } else {
-                    const new_pages = try get_reordered_pages(first_chunk, &rules, allocator);
+                    const new_pages = try getReorderedPages(first_chunk, &rules, allocator);
                     defer allocator.free(new_pages);
-                    reordered_total += try get_middle_page(new_pages, allocator);
+                    reordered_total += try getMiddlePage(new_pages, allocator);
                 }
             }
         }
@@ -59,7 +64,7 @@ fn add_rule(
     try rules.put(second_page, try new_rules.toOwnedSlice());
 }
 
-fn check_print_valid(
+fn checkPrintValid(
     print: []const u8,
     rules: *std.StringHashMap([][]const u8),
     allocator: std.mem.Allocator,
@@ -72,13 +77,13 @@ fn check_print_valid(
     defer pages_not_allowed.deinit();
 
     while (pages.next()) |page| {
-        if (array_list_contains_value(&pages_not_allowed, page)) {
+        if (arrayListContainsValue(&pages_not_allowed, page)) {
             return false;
         }
 
         if (rules.get(page)) |page_rules| {
             for (page_rules) |rule| {
-                if (!array_list_contains_value(&pages_not_allowed, rule)) {
+                if (!arrayListContainsValue(&pages_not_allowed, rule)) {
                     try pages_not_allowed.append(rule);
                 }
             }
@@ -88,7 +93,7 @@ fn check_print_valid(
     return true;
 }
 
-fn get_reordered_pages(print: []const u8, rules: *std.StringHashMap([][]const u8), allocator: std.mem.Allocator) ![]const u8 {
+fn getReorderedPages(print: []const u8, rules: *std.StringHashMap([][]const u8), allocator: std.mem.Allocator) ![]const u8 {
     var pages = std.mem.splitSequence(u8, print, ",");
     var page_list = std.ArrayList([]const u8).init(allocator);
 
@@ -99,14 +104,14 @@ fn get_reordered_pages(print: []const u8, rules: *std.StringHashMap([][]const u8
         var earlier_pages = std.ArrayList([]const u8).init(allocator);
 
         while (rules_iterator.next()) |rules_to_check| {
-            if (array_contains_value(rules_to_check.value_ptr, page)) {
+            if (arrayContainsValue(rules_to_check.value_ptr, page)) {
                 try earlier_pages.append(rules_to_check.key_ptr.*);
             }
         }
 
         var insert_index = page_list.items.len;
         for (page_list.items, 0..) |item, index| {
-            if (array_list_contains_value(&earlier_pages, item)) {
+            if (arrayListContainsValue(&earlier_pages, item)) {
                 insert_index = index;
                 break;
             }
@@ -141,7 +146,7 @@ fn get_reordered_pages(print: []const u8, rules: *std.StringHashMap([][]const u8
     return final_str;
 }
 
-fn get_middle_page(print: []const u8, allocator: std.mem.Allocator) !usize {
+fn getMiddlePage(print: []const u8, allocator: std.mem.Allocator) !usize {
     var pages = std.mem.splitSequence(u8, print, ",");
 
     var page_list = std.ArrayList([]const u8).init(allocator);
@@ -157,17 +162,9 @@ fn get_middle_page(print: []const u8, allocator: std.mem.Allocator) !usize {
     return 0;
 }
 
-fn array_contains_value(array: *[][]const u8, value: []const u8) bool {
+fn arrayContainsValue(array: *[][]const u8, value: []const u8) bool {
     for (array.*) |item| {
         if (std.mem.eql(u8, item, value)) return true;
-    }
-
-    return false;
-}
-
-fn array_list_contains_value(list: *std.ArrayList([]const u8), value: []const u8) bool {
-    for (0..list.items.len) |index| {
-        if (std.mem.eql(u8, list.items[index], value)) return true;
     }
 
     return false;
