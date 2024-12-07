@@ -1,28 +1,29 @@
 const std = @import("std");
 const file = @import("../file-helpers.zig");
 
+const arrayListContainsValue = @import("../array_list_helpers.zig").arrayListContainsValue(
+    Direction,
+    struct {
+        fn eqfn(a: Direction, b: Direction) bool {
+            return a == b;
+        }
+    }.eqfn,
+);
+
 const Direction = enum { up, down, left, right };
 
 fn getDirection(dir: Direction) Point {
     switch (dir) {
-        Direction.up => {
-            return Point{ .x = 0, .y = -1 };
-        },
-        Direction.down => {
-            return Point{ .x = 0, .y = 1 };
-        },
-        Direction.right => {
-            return Point{ .x = 1, .y = 0 };
-        },
-        Direction.left => {
-            return Point{ .x = -1, .y = 0 };
-        },
+        Direction.up => return Point{ .x = 0, .y = -1 },
+        Direction.down => return Point{ .x = 0, .y = 1 },
+        Direction.right => return Point{ .x = 1, .y = 0 },
+        Direction.left => return Point{ .x = -1, .y = 0 },
     }
 }
 
 const Cell = struct {
-    visitedDirections: ?std.ArrayList(Direction),
-    secondaryDirections: ?std.ArrayList(Direction),
+    visited_directions: ?std.ArrayList(Direction),
+    temp_directions: ?std.ArrayList(Direction),
 };
 
 const Grid = struct {
@@ -40,13 +41,19 @@ const Grid = struct {
             (@as(usize, @intCast(position.y)) * self.width) + @as(usize, @intCast(position.x))
         ];
     }
+
+    fn setCell(self: *Grid, position: Point, new_cell: Cell) void {
+        self.cells[
+            (@as(usize, @intCast(position.y)) * self.width) + @as(usize, @intCast(position.x))
+        ] = new_cell;
+    }
 };
 
 const Point = struct {
     x: isize,
     y: isize,
 
-    fn add(self: *Point, rhs: Point) Point {
+    fn add(self: *const Point, rhs: Point) Point {
         return Point{ .x = self.x + rhs.x, .y = self.y + rhs.y };
     }
 };
@@ -62,7 +69,7 @@ pub fn run(allocator: std.mem.Allocator) !void {
     var grid = init.grid;
     defer {
         for (grid.cells) |*cell| {
-            if (cell.visitedDirections) |*dir| {
+            if (cell.visited_directions) |*dir| {
                 dir.clearAndFree();
             }
         }
@@ -70,13 +77,22 @@ pub fn run(allocator: std.mem.Allocator) !void {
     }
 
     var visited: usize = 1;
+    var possible_obstructions: usize = 0;
     var direction = Direction.up;
     var position = init.starting_position;
     var next_position = position.add(getDirection(direction));
 
+    if (grid.getCell(position)) |start_cell| {
+        if (start_cell.visited_directions) |*directions| {
+            try directions.append(direction);
+        }
+    }
+
     while (grid.getCell(next_position)) |next_cell| {
+        if (try obstructionWouldCauseLoop(position, direction, &grid)) possible_obstructions += 1;
+
         // Check to see if the cell is obstructed
-        if (next_cell.visitedDirections) |*directions| {
+        if (next_cell.visited_directions) |*directions| {
             position = next_position;
 
             // Check to see if we've visited this cell going any other direction before
@@ -91,7 +107,7 @@ pub fn run(allocator: std.mem.Allocator) !void {
             // Turn right
             direction = getNextDirection(direction);
             if (grid.getCell(position)) |current_cell| {
-                if (current_cell.visitedDirections) |*directions| {
+                if (current_cell.visited_directions) |*directions| {
                     // Append that we've visited this cell going the new direction to our list of
                     // visited directions
                     try directions.append(direction);
@@ -104,6 +120,7 @@ pub fn run(allocator: std.mem.Allocator) !void {
     }
 
     std.debug.print("Total visited cells (part 1): {}\n", .{visited});
+    std.debug.print("Total possible obstructions (part 2): {}\n", .{possible_obstructions});
 }
 
 fn readGrid(buffer: []const u8, allocator: std.mem.Allocator) !struct { grid: Grid, starting_position: Point } {
@@ -124,8 +141,8 @@ fn readGrid(buffer: []const u8, allocator: std.mem.Allocator) !struct { grid: Gr
                 switch (character) {
                     '#' => {
                         try cell_list.append(Cell{
-                            .visitedDirections = null,
-                            .secondaryDirections = null,
+                            .visited_directions = null,
+                            .temp_directions = null,
                         });
                     },
                     '^' => {
@@ -137,14 +154,14 @@ fn readGrid(buffer: []const u8, allocator: std.mem.Allocator) !struct { grid: Gr
                         var directions = std.ArrayList(Direction).init(allocator);
                         try directions.append(Direction.up);
                         try cell_list.append(Cell{
-                            .visitedDirections = directions,
-                            .secondaryDirections = std.ArrayList(Direction).init(allocator),
+                            .visited_directions = directions,
+                            .temp_directions = std.ArrayList(Direction).init(allocator),
                         });
                     },
                     else => {
                         try cell_list.append(Cell{
-                            .visitedDirections = std.ArrayList(Direction).init(allocator),
-                            .secondaryDirections = std.ArrayList(Direction).init(allocator),
+                            .visited_directions = std.ArrayList(Direction).init(allocator),
+                            .temp_directions = std.ArrayList(Direction).init(allocator),
                         });
                     },
                 }
@@ -167,35 +184,84 @@ fn getNextDirection(direction: Direction) Direction {
     }
 }
 
-// Part 2 solution:
-//
-// For each step put a new test obstruction in front of the current position
-// Run the exit simulation until the character either exits the array
-// OR encounters a position where they've been going that direction already.
-// If they encounter a postion where they've been going that direction already
-// then we can assume that they are now in a loop.
+fn obstructionWouldCauseLoop(
+    starting_position: Point,
+    starting_direction: Direction,
+    grid: *Grid,
+) !bool {
+    // Check if the next position is already obstructed, return false if so
+    var current_position = starting_position;
+    var next_position = starting_position.add(getDirection(starting_direction));
+    var old_cell: ?Cell = null;
 
-// fn obstructionWouldCauseLoop(
-//     starting_position: Point,
-//     starting_direction: Direction,
-//     grid: *Grid,
-// ) bool {
-//     // Check if the next position is already obstructed, return false if so
-//     var next_position = starting_position.add(getDirection(starting_direction));
-//     if (grid.cells[next_position.arrayLocation(grid.width)].visitedDirections == null) {
-//         return false;
-//     }
-//
-//     // Make sure we clear our temp directions at the end of the function
-//     defer for (grid.cells) |*cell| {
-//         if (cell.secondaryDirections) |*directions| {
-//             directions.clearAndFree();
-//         }
-//     };
-//
-//     while (next_position.x >= 0 and next_position.y >= 0 and
-//         next_position.x < grid.grid_width and next_position.y < grid.grid_height)
-//     {}
-//
-//     return false;
-// }
+    if (grid.getCell(next_position) == null) {
+        return false;
+    }
+
+    if (grid.getCell(next_position)) |cell| {
+        if (cell.visited_directions) |directions| {
+            if (directions.items.len > 0) return false;
+        }
+
+        old_cell = Cell{
+            .visited_directions = cell.visited_directions,
+            .temp_directions = cell.temp_directions,
+        };
+
+        grid.setCell(next_position, Cell{
+            .visited_directions = null,
+            .temp_directions = null,
+        });
+    }
+
+    defer {
+        // Make sure we clear our temp directions at the end of the function
+        for (grid.cells) |*cell| {
+            if (cell.temp_directions) |*directions| {
+                directions.clearAndFree();
+            }
+        }
+
+        // and replace the cell that we set as an obstacle
+        if (old_cell) |*cell| {
+            grid.setCell(
+                starting_position.add(getDirection(starting_direction)),
+                cell.*,
+            );
+        }
+    }
+
+    // turn because we know that there is an obstruction
+    var direction = getNextDirection(starting_direction);
+    next_position = starting_position.add(getDirection(direction));
+
+    // Add our turned direction to our list of temp visited directions
+    if (grid.getCell(current_position)) |cell| {
+        if (cell.temp_directions) |*temp_directions| {
+            try temp_directions.append(starting_direction);
+            try temp_directions.append(direction);
+        }
+    }
+
+    while (grid.getCell(next_position)) |next_cell| {
+        if (next_cell.temp_directions) |*temp_directions| {
+            if (arrayListContainsValue(temp_directions, direction)) {
+                return true;
+            }
+
+            try temp_directions.append(direction);
+            current_position = next_position;
+        } else {
+            direction = getNextDirection(direction);
+            if (grid.getCell(current_position)) |cell| {
+                if (cell.temp_directions) |*temp_directions| {
+                    try temp_directions.append(direction);
+                }
+            }
+        }
+
+        next_position = current_position.add(getDirection(direction));
+    }
+
+    return false;
+}
