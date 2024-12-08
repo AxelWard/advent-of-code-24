@@ -1,5 +1,6 @@
 const std = @import("std");
 const file = @import("../file-helpers.zig");
+const Point = @import("../point.zig").Point;
 
 const arrayListContainsValue = @import("../array_list_helpers.zig").arrayListContainsValue(
     Direction,
@@ -46,15 +47,6 @@ const Grid = struct {
         self.cells[
             (@as(usize, @intCast(position.y)) * self.width) + @as(usize, @intCast(position.x))
         ] = new_cell;
-    }
-};
-
-const Point = struct {
-    x: isize,
-    y: isize,
-
-    fn add(self: *const Point, rhs: Point) Point {
-        return Point{ .x = self.x + rhs.x, .y = self.y + rhs.y };
     }
 };
 
