@@ -10,7 +10,7 @@ const arrayListContainsValue = @import("../array_list_helpers.zig").arrayListCon
 );
 
 pub fn run(allocator: std.mem.Allocator) !void {
-    std.debug.print("\n\nRunning AoC Day 5...\n\n", .{});
+    std.debug.print("Running AoC Day 5...\n\n", .{});
 
     const buffer = try allocator.alloc(u8, 20000);
     defer allocator.free(buffer);
