@@ -38,8 +38,6 @@ fn get_instruction(buffer: []const u8, buffer_length: usize, start_index: usize)
 }
 
 pub fn run(allocator: std.mem.Allocator) !void {
-    std.debug.print("Running AoC Day 3...\n\n", .{});
-
     const buffer = try allocator.alloc(u8, 32768);
     defer allocator.free(buffer);
     const input_length = try file.readFileToBuffer("input/day3.txt", buffer);

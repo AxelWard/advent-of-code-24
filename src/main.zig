@@ -32,6 +32,8 @@ pub fn main() !void {
 }
 
 fn run_day(day: u8, allocator: std.mem.Allocator) !void {
+    std.debug.print("Running AoC Day {}...\n\n", .{day});
+
     switch (day) {
         1 => try day_one.run(allocator),
         2 => try day_two.run(allocator),

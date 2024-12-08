@@ -1,14 +1,15 @@
 const std = @import("std");
 const file = @import("../file-helpers.zig");
+const progress = @import("../progress_logger.zig");
 
 const CalibrationLine = struct {
     target: usize,
     inputs: []const usize,
 };
 
-pub fn run(allocator: std.mem.Allocator) !void {
-    std.debug.print("Running AoC Day 7...\n\n", .{});
+const Operator = enum { add, mult, concat };
 
+pub fn run(allocator: std.mem.Allocator) !void {
     const buffer = try allocator.alloc(u8, 30000);
     defer allocator.free(buffer);
     const input_length = try file.readFileToBuffer("input/day7.txt", buffer);
@@ -19,11 +20,28 @@ pub fn run(allocator: std.mem.Allocator) !void {
     };
 
     var valid_lines: usize = 0;
-    for (lines) |line| {
-        if (try lineContainsValidCombo(line, allocator)) valid_lines += line.target;
+    var valid_lines_with_concat: usize = 0;
+
+    progress.logProgressStart();
+    for (lines, 1..) |line, index| {
+        progress.logProgress(index, lines.len);
+
+        if (try lineIsValid(
+            line.target,
+            line.inputs,
+            &[2]Operator{ Operator.add, Operator.mult },
+            allocator,
+        )) valid_lines += line.target;
+        if (try lineIsValid(
+            line.target,
+            line.inputs,
+            &[3]Operator{ Operator.add, Operator.mult, Operator.concat },
+            allocator,
+        )) valid_lines_with_concat += line.target;
     }
 
-    std.debug.print("Total of valid lines (part 1): {}\n", .{valid_lines});
+    std.debug.print("\n\nTotal of valid lines (part 1): {}\n", .{valid_lines});
+    std.debug.print("Total of valid lines (part 2): {}\n", .{valid_lines_with_concat});
 }
 
 fn readInputs(input: []const u8, allocator: std.mem.Allocator) !([]CalibrationLine) {
@@ -55,52 +73,52 @@ fn readInputs(input: []const u8, allocator: std.mem.Allocator) !([]CalibrationLi
     return try calibration_lines.toOwnedSlice();
 }
 
-fn lineContainsValidCombo(input: CalibrationLine, allocator: std.mem.Allocator) !bool {
-    if (input.inputs.len == 0) {
+fn lineIsValid(
+    target: usize,
+    inputs: []const usize,
+    operators_to_try: []const Operator,
+    allocator: std.mem.Allocator,
+) !bool {
+    if (inputs.len == 0 or inputs[0] > target) {
         return false;
+    } else if (inputs.len == 1) {
+        return inputs[0] == target;
     }
 
-    var mult_locations = try allocator.alloc(bool, input.inputs.len - 1);
-    for (0..mult_locations.len) |index| {
-        mult_locations[index] = false;
-    }
-    defer allocator.free(mult_locations);
+    for (operators_to_try) |operator| {
+        var new_input = inputs[0];
 
-    while (true) {
-        var total: usize = input.inputs[0];
-        for (mult_locations, 1..) |mult, index| {
-            if (mult) {
-                total *= input.inputs[index];
-            } else {
-                total += input.inputs[index];
-            }
+        if (operator == Operator.mult) {
+            new_input *= inputs[1];
+        } else if (operator == Operator.concat) {
+            const new_str = try std.fmt.allocPrint(
+                allocator,
+                "{}{}",
+                .{ new_input, inputs[1] },
+            );
+            defer allocator.free(new_str);
+
+            new_input = try std.fmt.parseInt(
+                usize,
+                new_str,
+                10,
+            );
+        } else {
+            new_input += inputs[1];
         }
 
-        if (total == input.target) return true;
+        var new_inputs = try allocator.alloc(usize, inputs.len - 1);
+        defer allocator.free(new_inputs);
 
-        if (every(mult_locations, true)) break;
+        new_inputs[0] = new_input;
+        if (inputs.len > 2) {
+            for (inputs[2..], 1..) |input, index| new_inputs[index] = input;
+        }
 
-        updateMultLocationsToCheck(mult_locations);
+        if (try lineIsValid(target, new_inputs, operators_to_try, allocator)) {
+            return true;
+        }
     }
 
     return false;
-}
-
-fn updateMultLocationsToCheck(mult_locations: []bool) void {
-    for (mult_locations[0 .. mult_locations.len - 1], 0..) |location, index| {
-        if (!location and every(mult_locations[index + 1 ..], true)) {
-            mult_locations[index] = true;
-            for (index + 1..mult_locations.len) |inner_index| {
-                mult_locations[inner_index] = false;
-            }
-            return;
-        }
-    }
-
-    mult_locations[mult_locations.len - 1] = true;
-}
-
-fn every(array: []const bool, value: bool) bool {
-    for (array) |item| if (item != value) return false;
-    return true;
 }

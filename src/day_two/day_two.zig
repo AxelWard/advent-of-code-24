@@ -2,8 +2,6 @@ const std = @import("std");
 const file = @import("../file-helpers.zig");
 
 pub fn run(allocator: std.mem.Allocator) !void {
-    std.debug.print("Running AoC Day 2...\n\n", .{});
-
     const buffer = try allocator.alloc(u8, 32768);
     defer allocator.free(buffer);
     const input_length = try file.readFileToBuffer("input/day2.txt", buffer);
