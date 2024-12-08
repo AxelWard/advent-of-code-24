@@ -20,8 +20,12 @@ pub fn run(allocator: std.mem.Allocator) !void {
         }
     }
 
-    std.debug.print("Total unique antinode points (Part 1): {}\n", .{
+    std.debug.print("Total unique equidistant antinode points (Part 1): {}\n", .{
         try getUniqueEquidistantAntinodeCount(&antennas, grid_width, grid_height, allocator),
+    });
+
+    std.debug.print("Total unique in line antinode points (Part 2): {}\n", .{
+        try getUniqueInLineAntinodeCount(&antennas, grid_width, grid_height, allocator),
     });
 }
 
@@ -70,12 +74,16 @@ fn getUniqueEquidistantAntinodeCount(
                 const antinode_1 = antenna.sub(distance);
                 const antinode_2 = second_antenna.add(distance);
 
-                if (pointInGrid(antinode_1, grid_width, grid_height) and !antinode_locations[pointAsIndex(antinode_1, grid_width)]) {
+                if (pointInGrid(antinode_1, grid_width, grid_height) and
+                    !antinode_locations[pointAsIndex(antinode_1, grid_width)])
+                {
                     antinode_locations[pointAsIndex(antinode_1, grid_width)] = true;
                     antinode_total += 1;
                 }
 
-                if (pointInGrid(antinode_2, grid_width, grid_height) and !antinode_locations[pointAsIndex(antinode_2, grid_width)]) {
+                if (pointInGrid(antinode_2, grid_width, grid_height) and
+                    !antinode_locations[pointAsIndex(antinode_2, grid_width)])
+                {
                     antinode_locations[pointAsIndex(antinode_2, grid_width)] = true;
                     antinode_total += 1;
                 }
@@ -84,6 +92,56 @@ fn getUniqueEquidistantAntinodeCount(
     }
 
     return antinode_total;
+}
+
+fn getUniqueInLineAntinodeCount(
+    antennas: *std.AutoHashMap(u8, []const Point),
+    grid_width: usize,
+    grid_height: usize,
+    allocator: std.mem.Allocator,
+) !usize {
+    var antenna_iter = antennas.iterator();
+
+    var antinode_locations = try allocator.alloc(bool, grid_width * grid_height);
+    for (0..antinode_locations.len) |location| antinode_locations[location] = false;
+    defer allocator.free(antinode_locations);
+
+    var antinode_total: usize = 0;
+    while (antenna_iter.next()) |antenna_set| {
+        for (antenna_set.value_ptr.*[0 .. antenna_set.value_ptr.len - 1], 0..) |antenna, index| {
+            for (antenna_set.value_ptr.*[index + 1 .. antenna_set.value_ptr.len]) |second_antenna| {
+                const distance = getSmallestStepPossible(second_antenna.sub(antenna));
+
+                var location = antenna.add(distance);
+                while (pointInGrid(location, grid_width, grid_height)) : (location = location.add(distance)) {
+                    if (!antinode_locations[pointAsIndex(location, grid_width)]) {
+                        antinode_locations[pointAsIndex(location, grid_width)] = true;
+                        antinode_total += 1;
+                    }
+                }
+
+                location = second_antenna.sub(distance);
+                while (pointInGrid(location, grid_width, grid_height)) : (location = location.sub(distance)) {
+                    if (!antinode_locations[pointAsIndex(location, grid_width)]) {
+                        antinode_locations[pointAsIndex(location, grid_width)] = true;
+                        antinode_total += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    return antinode_total;
+}
+
+fn getSmallestStepPossible(point: Point) Point {
+    // Get the greatest common denominator
+    const x = @abs(point.x);
+    const y = @abs(point.y);
+    var gcd = @min(x, y);
+    while (gcd > 0) : (gcd -= 1) if (x % gcd == 0 and y % gcd == 0) break;
+
+    return Point{ .x = @divExact(point.x, @as(i64, @intCast(gcd))), .y = @divExact(point.y, @as(i64, @intCast(gcd))) };
 }
 
 fn pointAsIndex(point: Point, grid_width: usize) usize {
