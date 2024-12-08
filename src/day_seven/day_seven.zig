@@ -20,7 +20,7 @@ pub fn run(allocator: std.mem.Allocator) !void {
 
     var valid_lines: usize = 0;
     for (lines) |line| {
-        if (lineContainsValidCombo(line)) valid_lines += line.target;
+        if (try lineContainsValidCombo(line, allocator)) valid_lines += line.target;
     }
 
     std.debug.print("Total of valid lines (part 1): {}\n", .{valid_lines});
@@ -55,10 +55,52 @@ fn readInputs(input: []const u8, allocator: std.mem.Allocator) !([]CalibrationLi
     return try calibration_lines.toOwnedSlice();
 }
 
-fn lineContainsValidCombo(input: CalibrationLine) bool {
+fn lineContainsValidCombo(input: CalibrationLine, allocator: std.mem.Allocator) !bool {
     if (input.inputs.len == 0) {
         return false;
     }
 
+    var mult_locations = try allocator.alloc(bool, input.inputs.len - 1);
+    for (0..mult_locations.len) |index| {
+        mult_locations[index] = false;
+    }
+    defer allocator.free(mult_locations);
+
+    while (true) {
+        var total: usize = input.inputs[0];
+        for (mult_locations, 1..) |mult, index| {
+            if (mult) {
+                total *= input.inputs[index];
+            } else {
+                total += input.inputs[index];
+            }
+        }
+
+        if (total == input.target) return true;
+
+        if (every(mult_locations, true)) break;
+
+        updateMultLocationsToCheck(mult_locations);
+    }
+
     return false;
+}
+
+fn updateMultLocationsToCheck(mult_locations: []bool) void {
+    for (mult_locations[0 .. mult_locations.len - 1], 0..) |location, index| {
+        if (!location and every(mult_locations[index + 1 ..], true)) {
+            mult_locations[index] = true;
+            for (index + 1..mult_locations.len) |inner_index| {
+                mult_locations[inner_index] = false;
+            }
+            return;
+        }
+    }
+
+    mult_locations[mult_locations.len - 1] = true;
+}
+
+fn every(array: []const bool, value: bool) bool {
+    for (array) |item| if (item != value) return false;
+    return true;
 }
