@@ -41,7 +41,7 @@ pub fn run(allocator: std.mem.Allocator) !void {
     });
 
     std.debug.print("Total file checksum (part 2): {}\n", .{
-        try calculateChecksumContiguous(buffer[0 .. input_length - 1]),
+        try calculateChecksumContiguous(input_files, allocator),
     });
 }
 
@@ -100,8 +100,62 @@ fn calculateChecksumFragmented(input: []const File) !usize {
     return checksum;
 }
 
-fn calculateChecksumContiguous(input: []const u8) !usize {
-    if (input.len == 0) return 0;    
+fn calculateChecksumContiguous(input: []const File, allocator: std.mem.Allocator) !usize {
+    var contiguous_files = std.ArrayList(File).init(allocator);
+    for (input) |file| {
+        try contiguous_files.append(file);
+    }
 
-    return 0;
+    var index = contiguous_files.items.len - 1;
+    while (index > 0) {
+        const file = contiguous_files.items[index];
+
+        if (file.id) |id| {
+            for (contiguous_files.items[0..index], 0..) |check_file, check_index| {
+                if (check_file.id == null and check_file.length >= file.length) {
+                    _ = contiguous_files.orderedRemove(index);
+
+                    try contiguous_files.insert(index, File{
+                        .id = null,
+                        .length = file.length,
+                    });
+
+                    _ = contiguous_files.orderedRemove(check_index);
+
+                    try contiguous_files.insert(check_index, File{
+                        .id = id,
+                        .length = file.length,
+                    });
+                    
+
+                    if (check_file.length > file.length) {
+                        try contiguous_files.insert(check_index + 1, File{
+                            .id = null,
+                            .length = check_file.length - file.length,
+                        });
+                    }
+
+
+                    break;
+                }
+            }
+        }
+
+        index -= 1;
+    }
+
+    var block_index: usize = 0;
+    var checksum: usize = 0;
+    for (contiguous_files.items) |file| {
+        if (file.id) |id| {
+            for (0..file.length) |_| {
+                checksum += id * block_index;
+                block_index += 1;
+            }
+        } else {
+            block_index += file.length;
+        }
+    }
+
+    return checksum;
 }
