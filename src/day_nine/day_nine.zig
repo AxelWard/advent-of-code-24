@@ -102,6 +102,8 @@ fn calculateChecksumFragmented(input: []const File) !usize {
 
 fn calculateChecksumContiguous(input: []const File, allocator: std.mem.Allocator) !usize {
     var contiguous_files = std.ArrayList(File).init(allocator);
+    defer contiguous_files.deinit();
+
     for (input) |file| {
         try contiguous_files.append(file);
     }
