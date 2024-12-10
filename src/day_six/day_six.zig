@@ -1,6 +1,6 @@
 const std = @import("std");
 const file = @import("../file-helpers.zig");
-const Point = @import("../point.zig").Point;
+const Point = @import("../Point.zig").Point;
 
 const arrayListContainsValue = @import("../array_list_helpers.zig").arrayListContainsValue(
     Direction,
@@ -27,28 +27,7 @@ const Cell = struct {
     temp_directions: ?std.ArrayList(Direction),
 };
 
-const Grid = struct {
-    cells: []Cell,
-    width: usize,
-    height: usize,
-
-    fn getCell(self: *Grid, position: Point) ?*Cell {
-        if (position.x < 0 or
-            position.y < 0 or
-            position.x >= self.width or
-            position.y >= self.height) return null;
-
-        return &self.cells[
-            (@as(usize, @intCast(position.y)) * self.width) + @as(usize, @intCast(position.x))
-        ];
-    }
-
-    fn setCell(self: *Grid, position: Point, new_cell: Cell) void {
-        self.cells[
-            (@as(usize, @intCast(position.y)) * self.width) + @as(usize, @intCast(position.x))
-        ] = new_cell;
-    }
-};
+const Grid = @import("../Grid.zig").Grid(Cell);
 
 pub fn run(allocator: std.mem.Allocator) !void {
     const buffer = try allocator.alloc(u8, 20000);

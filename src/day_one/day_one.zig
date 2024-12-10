@@ -18,7 +18,7 @@ pub fn run(allocator: std.mem.Allocator) !void {
             try first_list.append(try std.fmt.parseInt(i64, line_chunks.first(), 10));
             try second_list.append(try std.fmt.parseInt(i64, line_chunks.next().?, 10));
         }
-    }
+    }    
 
     const first_array = try first_list.toOwnedSlice();
     const second_array = try second_list.toOwnedSlice();

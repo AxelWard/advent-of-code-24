@@ -1,6 +1,6 @@
 const std = @import("std");
 const file = @import("../file-helpers.zig");
-const Point = @import("../point.zig").Point;
+const Point = @import("../Point.zig").Point;
 
 pub fn run(allocator: std.mem.Allocator) !void {
     const buffer = try allocator.alloc(u8, 20000);
