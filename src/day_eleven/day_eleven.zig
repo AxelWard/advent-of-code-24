@@ -2,7 +2,7 @@ const std = @import("std");
 const readFileToBuffer = @import("../file-helpers.zig").readFileToBuffer;
 const progress = @import("../progress_logger.zig");
 
-const NUM_SPLITS: usize = 25;
+const NUM_SPLITS: usize = 75;
 
 pub fn run(allocator: std.mem.Allocator) !void {
     const buffer = try allocator.alloc(u8, 20000);
@@ -19,50 +19,59 @@ pub fn run(allocator: std.mem.Allocator) !void {
         try stones.append(chunk);
     }
 
-    progress.logProgressStart();
-    try splitStones(NUM_SPLITS, &stones, allocator);
+    var total_stones: usize = 0;
+    var known_splits = std.StringHashMap(usize).init(allocator);
+    for (stones.items) |stone| total_stones += try splitStone(stone, NUM_SPLITS, &known_splits, allocator);
 
-    std.debug.print("\nFinal stone count (part 1): {}\n", .{stones.items.len});
+    std.debug.print("\nFinal stone count (part 2): {}\n", .{total_stones});
 }
 
-fn splitStones(
+fn splitStone(
+    stone: []const u8,
     splitsRemaining: usize,
-    stones: *std.ArrayList([]const u8),
+    known_splits: *std.StringHashMap(usize),
     allocator: std.mem.Allocator,
-) !void {
-    progress.logProgress(NUM_SPLITS - splitsRemaining, NUM_SPLITS);
-    if (splitsRemaining == 0) return;
+) !usize {
+    if (splitsRemaining == 0) return 1;
 
-    var index: usize = 0;
-    while (index < stones.items.len) {
-        const stone = stones.items[index];
-        if (std.mem.eql(u8, stone, "0")) {
-            try stones.replaceRange(index, 1, &[1][]const u8{"1"});
-            index += 1;
-        } else if (stone.len % 2 == 0) {
-            const middle_index = stone.len / 2;
-            var start_index: usize = 0;
-            while (std.mem.eql(u8, &[1]u8{stone[start_index]}, "0") and start_index < middle_index - 1) {
-                start_index += 1;
-            }
-            try stones.replaceRange(index, 1, &[1][]const u8{stone[start_index..middle_index]});
+    const index_string = try std.fmt.allocPrint(
+        allocator,
+        "{s}-{}",
+        .{ stone, splitsRemaining },
+    );
 
-            start_index = middle_index;
-            while (std.mem.eql(u8, &[1]u8{stone[start_index]}, "0") and start_index < stone.len - 1) {
-                start_index += 1;
-            }
-            try stones.insert(index + 1, stone[start_index..]);
-            index += 2;
-        } else {
-            const stone_string = try std.fmt.allocPrint(
-                allocator,
-                "{}",
-                .{try std.fmt.parseUnsigned(usize, stone, 10) * 2024},
-            );
-            try stones.replaceRange(index, 1, &[1][]const u8{stone_string});
-            index += 1;
+    if (known_splits.get(index_string)) |value| return value;
+
+    var stone_value: usize = 0;
+    if (std.mem.eql(u8, stone, "0")) {
+        stone_value = try splitStone("1", splitsRemaining - 1, known_splits, allocator);
+    } else if (stone.len % 2 == 0) {
+        const middle_index = stone.len / 2;
+        var start_index: usize = 0;
+
+        while (std.mem.eql(u8, &[1]u8{stone[start_index]}, "0") and start_index < middle_index - 1) {
+            start_index += 1;
         }
+
+        const stone_one = try splitStone(stone[start_index..middle_index], splitsRemaining - 1, known_splits, allocator);
+
+        start_index = middle_index;
+        while (std.mem.eql(u8, &[1]u8{stone[start_index]}, "0") and start_index < stone.len - 1) {
+            start_index += 1;
+        }
+
+        stone_value = stone_one + try splitStone(stone[start_index..], splitsRemaining - 1, known_splits, allocator);
+    } else {
+        const stone_string = try std.fmt.allocPrint(
+            allocator,
+            "{}",
+            .{try std.fmt.parseUnsigned(usize, stone, 10) * 2024},
+        );
+        defer allocator.free(stone_string);
+
+        stone_value = try splitStone(stone_string, splitsRemaining - 1, known_splits, allocator);
     }
 
-    try splitStones(splitsRemaining - 1, stones, allocator);
+    try known_splits.put(index_string, stone_value);
+    return stone_value;
 }
