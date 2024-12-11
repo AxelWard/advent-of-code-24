@@ -39,7 +39,7 @@ pub fn run(allocator: std.mem.Allocator) !void {
         }
     }
 
-    std.debug.print("Trailhead start count (part 1): {}\n", .{found_destinations});
+    std.debug.print("Trail distinct count (part 2): {}\n", .{found_destinations});
 }
 
 fn readGrid(buffer: []const u8, allocator: std.mem.Allocator) !Grid {
@@ -78,23 +78,26 @@ fn searchAdjacent(
     allocator: std.mem.Allocator,
 ) !usize {
     if (start_val == 9) {
-        if (grid.getCell(search_point)) |cell| {
-            for (cell.found_by) |point| {
-                if (point.x != search_start.x or point.y != search_start.y) {
-                    continue;
-                } else return 0;
-            }
+        // Part 1 logic
+        //
+        // if (grid.getCell(search_point)) |cell| {
+        //     for (cell.found_by) |point| {
+        //         if (point.x != search_start.x or point.y != search_start.y) {
+        //             continue;
+        //         } else return 0;
+        //     }
 
-            var points = try allocator.alloc(Point, cell.found_by.len + 1);
-            if (cell.found_by.len != 0) {
-                @memcpy(points[0..cell.found_by.len], cell.found_by);
-            }
-            points[points.len - 1] = search_start;
-            allocator.free(cell.found_by);
-            cell.found_by = points;
+        //     var points = try allocator.alloc(Point, cell.found_by.len + 1);
+        //     if (cell.found_by.len != 0) {
+        //         @memcpy(points[0..cell.found_by.len], cell.found_by);
+        //     }
+        //     points[points.len - 1] = search_start;
+        //     allocator.free(cell.found_by);
+        //     cell.found_by = points;
 
-            return 1;
-        }
+        return 1;
+
+        // }
     }
 
     var cell_sum: usize = 0;
