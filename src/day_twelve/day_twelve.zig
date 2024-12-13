@@ -37,14 +37,18 @@ pub fn run(allocator: std.mem.Allocator) !void {
     defer {
         allocator.free(sizes.areas);
         allocator.free(sizes.perimeters);
+        allocator.free(sizes.edges);
     }
 
     var total_plot_price: usize = 0;
+    var total_bulk_price: usize = 0;
     for (sizes.areas, 0..) |area, index| {
         total_plot_price += area * sizes.perimeters[index];
+        total_bulk_price += area * sizes.edges[index];
     }
 
     std.debug.print("Total garden plot price (part 1): {}\n", .{total_plot_price});
+    std.debug.print("Total garden plot bulk price (part 2): {}\n", .{total_bulk_price});
 }
 
 fn readGrid(buffer: []const u8, allocator: std.mem.Allocator) !Grid {
@@ -80,6 +84,7 @@ const PlotInfos = struct {
     next_plot_index: usize,
     area_list: std.ArrayList(usize),
     perimeter_list: std.ArrayList(usize),
+    edge_list: std.ArrayList(usize),
 
     fn addNewPlot(self: *PlotInfos, init_cell: *Cell) !void {
         init_cell.plot_index = self.next_plot_index;
@@ -87,6 +92,7 @@ const PlotInfos = struct {
 
         try self.area_list.append(1);
         try self.perimeter_list.append(4);
+        try self.edge_list.append(4);
     }
 
     fn combineGridPlots(self: *PlotInfos, grid: *Grid, destination_plot: usize, remove_plot: usize) void {
@@ -98,20 +104,24 @@ const PlotInfos = struct {
 
         self.area_list.items[destination_plot] += self.area_list.items[remove_plot];
         self.perimeter_list.items[destination_plot] += self.perimeter_list.items[remove_plot];
+        self.edge_list.items[destination_plot] += self.edge_list.items[remove_plot];
 
         self.area_list.items[remove_plot] = 0;
         self.perimeter_list.items[remove_plot] = 0;
+        self.edge_list.items[remove_plot] = 0;
     }
 };
 
 fn getGardenPlotSizes(grid: *Grid, allocator: std.mem.Allocator) !struct {
     areas: []usize,
     perimeters: []usize,
+    edges: []usize,
 } {
     var infos = PlotInfos{
         .next_plot_index = 0,
         .area_list = std.ArrayList(usize).init(allocator),
         .perimeter_list = std.ArrayList(usize).init(allocator),
+        .edge_list = std.ArrayList(usize).init(allocator),
     };
 
     for (0..grid.height) |y_index| {
@@ -125,6 +135,9 @@ fn getGardenPlotSizes(grid: *Grid, allocator: std.mem.Allocator) !struct {
                 const x_check = grid.getCell(current_point.add(Point{ .x = -1, .y = 0 }));
                 const y_check = grid.getCell(current_point.add(Point{ .x = 0, .y = -1 }));
 
+                const tl_check = grid.getCell(current_point.add(Point{ .x = -1, .y = -1 }));
+                const tr_check = grid.getCell(current_point.add(Point{ .x = 1, .y = -1 }));
+
                 if (cell.plantMatches(x_check) and cell.plantMatches(y_check)) {
                     cell.plot_index = x_check.?.plot_index;
 
@@ -133,16 +146,34 @@ fn getGardenPlotSizes(grid: *Grid, allocator: std.mem.Allocator) !struct {
                     }
 
                     infos.area_list.items[cell.plot_index] += 1;
+
+                    if (cell.plotMatches(tl_check) and !cell.plotMatches(tr_check)) {
+                        infos.edge_list.items[cell.plot_index] -= 2;
+                    } else if (!cell.plotMatches(tl_check) and !cell.plotMatches(tr_check)) {
+                        infos.edge_list.items[cell.plot_index] -= 2;
+                    }
                 } else if (cell.plantMatches(x_check)) {
                     cell.plot_index = x_check.?.plot_index;
 
                     infos.area_list.items[cell.plot_index] += 1;
                     infos.perimeter_list.items[cell.plot_index] += 2;
+
+                    if (cell.plotMatches(tl_check)) {
+                        infos.edge_list.items[cell.plot_index] += 2;
+                    }
                 } else if (cell.plantMatches(y_check)) {
                     cell.plot_index = y_check.?.plot_index;
 
                     infos.area_list.items[cell.plot_index] += 1;
                     infos.perimeter_list.items[cell.plot_index] += 2;
+
+                    if (cell.plotMatches(tl_check) and !cell.plotMatches(tr_check)) {
+                        infos.edge_list.items[cell.plot_index] += 2;
+                    } else if (cell.plotMatches(tr_check) and !cell.plotMatches(tl_check)) {
+                        infos.edge_list.items[cell.plot_index] += 2;
+                    } else if (cell.plotMatches(tr_check) and cell.plotMatches(tl_check)) {
+                        infos.edge_list.items[cell.plot_index] += 4;
+                    }
                 } else {
                     try infos.addNewPlot(cell);
                 }
@@ -153,5 +184,6 @@ fn getGardenPlotSizes(grid: *Grid, allocator: std.mem.Allocator) !struct {
     return .{
         .areas = try infos.area_list.toOwnedSlice(),
         .perimeters = try infos.perimeter_list.toOwnedSlice(),
+        .edges = try infos.edge_list.toOwnedSlice(),
     };
 }
