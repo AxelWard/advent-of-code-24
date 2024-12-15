@@ -10,6 +10,10 @@ pub const Point = struct {
         return Point{ .x = self.x - rhs.x, .y = self.y - rhs.y };
     }
 
+    pub fn mult(self: *const Point, rhs: isize) Point {
+        return Point{ .x = self.x * rhs, .y = self.y * rhs };
+    }
+
     pub fn eq(self: *const Point, rhs: Point) bool {
         return self.x == rhs.x and self.y == rhs.y;
     }

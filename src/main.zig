@@ -13,6 +13,7 @@ const day_eleven = @import("./day_eleven/day_eleven.zig");
 const day_twelve = @import("./day_twelve/day_twelve.zig");
 const day_thirteen = @import("./day_thirteen/day_thirteen.zig");
 const day_fourteen = @import("./day_fourteen/day_fourteen.zig");
+const day_fifteen = @import("./day_fifteen/day_fifteen.zig");
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
@@ -56,6 +57,7 @@ fn run_day(day: u8, allocator: std.mem.Allocator) !void {
         12 => try day_twelve.run(allocator),
         13 => try day_thirteen.run(allocator),
         14 => try day_fourteen.run(allocator),
+        15 => try day_fifteen.run(allocator),
         else => std.debug.print("Day not implemented yet!\n", .{}),
     }
 }
