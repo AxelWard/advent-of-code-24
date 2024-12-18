@@ -235,6 +235,7 @@ fn getBoxesToPushY(grid: *Grid, boxToCheckLeft: Point, direction: Point, allocat
 
 const arrayListContainsValue = @import("../array_list_helpers.zig").arrayListContainsValue(
     Point,
+    Point,
     struct {
         fn eqfn(a: Point, b: Point) bool {
             return a.x == b.x and a.y == b.y;

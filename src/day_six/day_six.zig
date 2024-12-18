@@ -4,6 +4,7 @@ const Point = @import("../Point.zig").Point;
 
 const arrayListContainsValue = @import("../array_list_helpers.zig").arrayListContainsValue(
     Direction,
+    Direction,
     struct {
         fn eqfn(a: Direction, b: Direction) bool {
             return a == b;

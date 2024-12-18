@@ -2,6 +2,7 @@ const std = @import("std");
 const file = @import("../file-helpers.zig");
 const arrayListContainsValue = @import("../array_list_helpers.zig").arrayListContainsValue(
     []const u8,
+    []const u8,
     struct {
         fn eqfn(a: []const u8, b: []const u8) bool {
             return std.mem.eql(u8, a, b);
