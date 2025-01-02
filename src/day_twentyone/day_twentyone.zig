@@ -2,31 +2,10 @@ const std = @import("std");
 const file = @import("../file-helpers.zig");
 const Point = @import("../Point.zig").Point;
 
-pub fn run(allocator: std.mem.Allocator) !void {
-    const buffer = try allocator.alloc(u8, 25000);
-    defer allocator.free(buffer);
-    const input_length = try file.readFileToBuffer("input/day21_test.txt", buffer);
-
-    var lines = std.mem.splitSequence(u8, buffer[0 .. input_length - 1], "\n");
-
-    var total_complexity: usize = 0;
-    while (lines.next()) |line| {
-        const input_code = try getInputCode(line, allocator);
-        defer allocator.free(input_code);
-
-        const complexity_to_add = try std.fmt.parseInt(usize, line[0..3], 10) * input_code.len;
-        total_complexity += complexity_to_add;
-
-        std.debug.print("For input {s} got {} complexity key sequence ({s} {})\n", .{ line, complexity_to_add, line[0..3], input_code.len });
-    }
-
-    std.debug.print("Total complexity (part 1): {} (< 181454)\n", .{total_complexity});
-}
-
 const Button = struct { input: u8, location: Point };
 const Keypad = struct { buttons: []const Button, disallowed_location: Point };
 
-const NumberPad = Keypad{
+const NUMBER_PAD = Keypad{
     .buttons = &[11]Button{
         .{ .input = '7', .location = Point{ .x = 0, .y = 0 } },
         .{ .input = '8', .location = Point{ .x = 1, .y = 0 } },
@@ -43,7 +22,7 @@ const NumberPad = Keypad{
     .disallowed_location = Point{ .x = 0, .y = 3 },
 };
 
-const DirectionalPad = Keypad{
+const DIRECTIONAL_PAD = Keypad{
     .buttons = &[5]Button{
         .{ .input = '^', .location = Point{ .x = 1, .y = 0 } },
         .{ .input = 'A', .location = Point{ .x = 2, .y = 0 } },
@@ -54,94 +33,129 @@ const DirectionalPad = Keypad{
     .disallowed_location = Point{ .x = 0, .y = 0 },
 };
 
+pub fn run(allocator: std.mem.Allocator) !void {
+    const buffer = try allocator.alloc(u8, 25000);
+    defer allocator.free(buffer);
+    const input_length = try file.readFileToBuffer("input/day21.txt", buffer);
+
+    var lines = std.mem.splitSequence(u8, buffer[0 .. input_length - 1], "\n");
+
+    var total_complexity: usize = 0;
+    while (lines.next()) |line| {
+        var key_sequence = std.ArrayList(u8).init(allocator);
+        defer key_sequence.clearAndFree();
+
+        var keypad_arm_location = Point{ .x = 2, .y = 3 };
+        for (line) |input_character| {
+            const new_key_sequence = try getNecessaryDirectionalInputs(
+                keypad_arm_location,
+                input_character,
+                NUMBER_PAD,
+                allocator,
+            );
+
+            std.debug.print("Initial input sequence:\n{s}\n", .{new_key_sequence.input_sequence});
+            try key_sequence.appendSlice(try expandInputCode(
+                new_key_sequence.input_sequence,
+                NUMBER_PAD,
+                keypad_arm_location,
+                0,
+                allocator,
+            ));
+            keypad_arm_location = new_key_sequence.new_location;
+        }
+
+        const input_code = try key_sequence.toOwnedSlice();
+        defer allocator.free(input_code);
+
+        const complexity_to_add = try std.fmt.parseInt(usize, line[0..3], 10) * input_code.len;
+        total_complexity += complexity_to_add;
+
+        std.debug.print("For input {s} got {} complexity key sequence ({s} {})\n{s}\n\n", .{
+            line,
+            complexity_to_add,
+            line[0..3],
+            input_code.len,
+            input_code,
+        });
+    }
+
+    std.debug.print("Total complexity (part 1): {} (< 181454)\n", .{total_complexity});
+}
+
 const DIRECTIONAL_ARM_COUNT: usize = 2;
 const DIRECTIONAL_ARM_START = Point{ .x = 2, .y = 0 };
 
-// REWORK THIS SHIT TO BE RECURSIVE
-
-fn getInputCode(input: []const u8, allocator: std.mem.Allocator) ![]u8 {
-    var keypad_arm_location = Point{ .x = 2, .y = 3 };
-
-    var key_sequence = std.ArrayList(u8).init(allocator);
-
-    for (input) |input_character| {
-        const new_key_sequence = try getNecessaryDirectionalInputs(
-            keypad_arm_location,
-            input_character,
-            NumberPad,
-            allocator,
-        );
-
-        keypad_arm_location = new_key_sequence.new_location;
-        try key_sequence.appendSlice(new_key_sequence.input_sequence);
+fn expandInputCode(input: []u8, previous_keypad: Keypad, previous_arm_start: Point, depth: usize, allocator: std.mem.Allocator) ![]u8 {
+    if (depth == DIRECTIONAL_ARM_COUNT) {
+        return input;
     }
 
-    std.debug.print("\nInitial input sequence:\n{s}\n", .{key_sequence.items});
-
-    for (0..DIRECTIONAL_ARM_COUNT) |arm_index| {
-        var character_index: usize = 0;
-        var take_count: usize = 0;
-        while (character_index < key_sequence.items.len) {
-            if (key_sequence.items[character_index] != 'A') {
-                character_index += 1;
-                take_count += 1;
-                continue;
-            }
-
-            if (take_count == 0) {
-                character_index += 1;
-                continue;
-            }
-
-            const start_location = character_index - take_count;
-            const inputs = key_sequence.items[start_location .. character_index + 1];
-            const reordered_inputs = try reorderInputs(inputs, allocator);
-
-            var expanded_inputs = try expandInputSequence(DIRECTIONAL_ARM_START, inputs, DirectionalPad, allocator);
-
-            if (!std.mem.eql(u8, inputs, reordered_inputs)) {
-                std.debug.print("Reorder for {s} is {s}\n", .{ inputs, reordered_inputs });
-                const expanded_reordered_inputs = try expandInputSequence(DIRECTIONAL_ARM_START, reordered_inputs, DirectionalPad, allocator);
-                const reordered_rating = calculateInputDistanceRating(
-                    DIRECTIONAL_ARM_START,
-                    expanded_reordered_inputs,
-                    DirectionalPad,
-                );
-
-                const inputs_rating = calculateInputDistanceRating(
-                    DIRECTIONAL_ARM_START,
-                    expanded_inputs,
-                    DirectionalPad,
-                );
-
-                std.debug.print("Comparing {s} ({d}) to {s} ({d})\n", .{ expanded_inputs, inputs_rating, expanded_reordered_inputs, reordered_rating });
-
-                if (reordered_rating < inputs_rating) {
-                    allocator.free(expanded_inputs);
-                    expanded_inputs = expanded_reordered_inputs;
-                }
-            }
-
-            try key_sequence.replaceRange(
-                start_location,
-                inputs.len,
-                expanded_inputs,
-            );
-
-            character_index += expanded_inputs.len - take_count;
-            take_count = 0;
+    var key_sequence = std.ArrayList(u8).fromOwnedSlice(allocator, input);
+    var character_index: usize = 0;
+    var take_count: usize = 0;
+    while (character_index < key_sequence.items.len) {
+        if (key_sequence.items[character_index] != 'A') {
+            character_index += 1;
+            take_count += 1;
+            continue;
         }
 
-        std.debug.print("Arm {} expanded sequence to:\n{s}\n", .{ arm_index, key_sequence.items });
+        if (take_count == 0) {
+            character_index += 1;
+            continue;
+        }
+
+        const start_location = character_index - take_count;
+        const inputs = key_sequence.items[start_location .. character_index + 1];
+        const reordered_inputs = try reorderInputs(inputs, previous_keypad, previous_arm_start, allocator);
+
+        var expanded_inputs = try getInputSequenceExpansion(DIRECTIONAL_ARM_START, inputs, DIRECTIONAL_PAD, allocator);
+
+        if (!std.mem.eql(u8, inputs, reordered_inputs)) {
+            std.debug.print("Reorder for {s} is {s}\n", .{ inputs, reordered_inputs });
+            const expanded_reordered_inputs = try getInputSequenceExpansion(DIRECTIONAL_ARM_START, reordered_inputs, DIRECTIONAL_PAD, allocator);
+            const reordered_rating = calculateInputDistanceRating(
+                DIRECTIONAL_ARM_START,
+                expanded_reordered_inputs,
+                DIRECTIONAL_PAD,
+            );
+
+            const inputs_rating = calculateInputDistanceRating(
+                DIRECTIONAL_ARM_START,
+                expanded_inputs,
+                DIRECTIONAL_PAD,
+            );
+
+            std.debug.print("Comparing {s} ({d}) to {s} ({d})\n", .{ expanded_inputs, inputs_rating, expanded_reordered_inputs, reordered_rating });
+
+            if (reordered_rating < inputs_rating) {
+                allocator.free(expanded_inputs);
+                expanded_inputs = expanded_reordered_inputs;
+            }
+        }
+
+        try key_sequence.replaceRange(
+            start_location,
+            inputs.len,
+            expanded_inputs,
+        );
+
+        character_index += expanded_inputs.len - take_count;
+        take_count = 0;
     }
 
-    return key_sequence.toOwnedSlice();
+    std.debug.print("Arm {} expanded sequence to:\n{s}\n", .{ depth, key_sequence.items });
+
+    return expandInputCode(try key_sequence.toOwnedSlice(), DIRECTIONAL_PAD, DIRECTIONAL_ARM_START, depth + 1, allocator);
 }
 
 pub fn reorderInputs(
     input_sequence: []const u8,
+    previous_keypad: Keypad,
+    previous_arm_start: Point,
     allocator: std.mem.Allocator,
-) ![]u8 {
+) ![]const u8 {
     var characters = std.ArrayList(u8).init(allocator);
     var character_counts = std.ArrayList(usize).init(allocator);
     defer characters.deinit();
@@ -162,10 +176,26 @@ pub fn reorderInputs(
     }
     try new_characters.append('A');
 
+    var location = previous_arm_start;
+    for (new_characters.items) |character| {
+        switch (character) {
+            '<' => location = location.add(Point{ .x = -1, .y = 0 }),
+            '>' => location = location.add(Point{ .x = 1, .y = 0 }),
+            '^' => location = location.add(Point{ .x = 0, .y = -1 }),
+            'v' => location = location.add(Point{ .x = 0, .y = 1 }),
+            else => {},
+        }
+
+        if (location.eq(previous_keypad.disallowed_location)) {
+            new_characters.clearAndFree();
+            return input_sequence;
+        }
+    }
+
     return try new_characters.toOwnedSlice();
 }
 
-fn expandInputSequence(
+fn getInputSequenceExpansion(
     start_location: Point,
     input_sequence: []const u8,
     keypad: Keypad,
@@ -194,7 +224,7 @@ fn getNecessaryDirectionalInputs(
     keypad: Keypad,
     allocator: std.mem.Allocator,
 ) !struct {
-    input_sequence: []const u8,
+    input_sequence: []u8,
     new_location: Point,
 } {
     var inputs = std.ArrayList(u8).init(allocator);
